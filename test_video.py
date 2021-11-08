@@ -9,12 +9,13 @@ from torchvision import transforms
 from torchvision.utils import save_image
 from torchvision.utils import save_image
 from function import calc_mean_std, normal, coral
-import net_31 as net
+import net
 import numpy as np
 import cv2
 import yaml
 
-#读取文件函数
+
+# 读取文件函数
 def get_files(img_dir):
     files = os.listdir(img_dir)
     paths = []
@@ -22,30 +23,33 @@ def get_files(img_dir):
         paths.append(os.path.join(img_dir, x))
     return paths
 
-#加载图片
+
+# 加载图片
 def load_images(args):
-    assert (args.content or args.content_dir)
-    assert (args.style or args.style_dir)
-    if not args.content:
+    assert (args.content or args.content_dir)
+    assert (args.style or args.style_dir)
+    if not args.content:
         content_paths = get_files(content_dir)
     else:
-        content_paths = [args.content]
-    if not args.style:
+        content_paths = [args.content]
+    if not args.style:
         style_paths = get_files(style_dir)
     else:
-        style_paths = [args.style]
+        style_paths = [args.style]
     return content_paths, style_paths
 
-#加载模型参数
+
+# 加载模型参数
 def load_weights(vgg, decoder, mcc_module):
     vgg.load_state_dict(torch.load(args.vgg_path))
     decoder.load_state_dict(torch.load(args.decoder_path))
     mcc_module.load_state_dict(torch.load(args.transform_path))
 
-#图片预处理
+
+# 图片预处理
 def test_transform(size, crop):
     transform_list = []
-    if size != 0: 
+    if size != 0:
         transform_list.append(transforms.Resize(size))
     if crop:
         transform_list.append(transforms.CenterCrop(size))
@@ -53,9 +57,10 @@ def test_transform(size, crop):
     transform = transforms.Compose(transform_list)
     return transform
 
-#风格图预处理
-def style_transform(h,w):
-    k = (h,w)
+
+# 风格图预处理
+def style_transform(h, w):
+    k = (h, w)
     size = int(np.max(k))
 
     transform_list = []
@@ -64,21 +69,23 @@ def style_transform(h,w):
     transform = transforms.Compose(transform_list)
     return transform
 
-#内容图预处理
+
+# 内容图预处理
 def content_transform():
     transform_list = []
     transform_list.append(transforms.ToTensor())
     transform = transforms.Compose(transform_list)
     return transform
 
-#风格化函数
+
+# 风格化函数
 def style_transfer(vgg, decoder, sa_module, content, style, alpha=1.0,
                    interpolation_weights=None):
     assert (0.0 <= alpha <= 1.0)
 
-    style_fs, content_f, style_f=feat_extractor(vgg, content, style)
+    style_fs, content_f, style_f = feat_extractor(vgg, content, style)
 
-    Fccc = sa_module(content_f,content_f)
+    Fccc = sa_module(content_f, content_f)
 
     if interpolation_weights:
         _, C, H, W = Fccc.size()
@@ -86,12 +93,13 @@ def style_transfer(vgg, decoder, sa_module, content, style, alpha=1.0,
         base_feat = sa_module(content_f, style_f)
         for i, w in enumerate(interpolation_weights):
             feat = feat + w * base_feat[i:i + 1]
-        Fccc=Fccc[0:1]
+        Fccc = Fccc[0:1]
     else:
         feat = sa_module(content_f, style_f)
     feat = feat * alpha + Fccc * (1 - alpha)
-    return decoder(feat),feat
-  
+    return decoder(feat), feat
+
+
 def feat_extractor(vgg, content, style):
     norm = nn.Sequential(*list(vgg.children())[:1])
     enc_1 = nn.Sequential(*list(vgg.children())[:4])  # input -> relu1_1
@@ -114,20 +122,22 @@ def feat_extractor(vgg, content, style):
     Style4_1 = enc_4(enc_3(enc_2(enc_1(style))))
     Style5_1 = enc_5(Style4_1)
 
-    content_f=[content3_1,Content4_1,Content5_1]
-    style_f=[Style3_1,Style4_1,Style5_1]
+    content_f = [content3_1, Content4_1, Content5_1]
+    style_f = [Style3_1, Style4_1, Style5_1]
 
-    style_fs = [enc_1(style),enc_2(enc_1(style)),enc_3(enc_2(enc_1(style))),Style4_1, Style5_1]
+    style_fs = [enc_1(style), enc_2(enc_1(style)), enc_3(enc_2(enc_1(style))), Style4_1, Style5_1]
 
-    return style_fs,content_f, style_f
+    return style_fs, content_f, style_f
 
-#图片处理，调用style_tansfer
+
+# 图片处理，调用style_tansfer
 def image_process(content, style, type="video"):
-    if type=="image":
-        content_tf1 = test_transform(512,True)
+    if type == "image":
+        #content_tf1 = test_transform(512, True)
+        content_tf1 = content_transform()
         content_frame = content_tf1(content.convert("RGB"))
         h, w, c = np.shape(content_frame)
-        style_tf1 = test_transform(512,True)
+        style_tf1 = test_transform(512, True)
         style = style_tf1(style.convert("RGB"))
 
     else:
@@ -149,8 +159,9 @@ def image_process(content, style, type="video"):
 
     return output.squeeze(0).cpu(), style_f
 
-#加载视频
-def load_video(content_path,style_path, outfile):
+
+# 加载视频
+def load_video(content_path, style_path, outfile):
     video = cv2.VideoCapture(content_path)
 
     rate = video.get(5)
@@ -163,15 +174,18 @@ def load_video(content_path,style_path, outfile):
 
     videoWriter = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc('D', 'I', 'V', 'X'), fps,
                                   (int(width), int(height)))
-    return video,videoWriter
-#存储视频
+    return video, videoWriter
+
+
+# 存储视频
 def save_frame(output, videoWriter):
     output = output * 255 + 0.5
-    output = torch.tensor(torch.clamp(output, 0, 255).permute(1, 2, 0),dtype=torch.uint8).numpy()
+    output = torch.tensor(torch.clamp(output, 0, 255).permute(1, 2, 0), dtype=torch.uint8).numpy()
     output = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
     videoWriter.write(output)  # 写入帧图
 
-#视频风格化
+
+# 视频风格化
 def process_video(content_path, style_path, outfile):
     j = 0
     video, videoWriter = load_video(content_path, style_path, outfile)
@@ -184,17 +198,18 @@ def process_video(content_path, style_path, outfile):
         if j % 1 == False:
             style = Image.open(style_path)
             content = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            output,style = image_process(frame, style)
+            output, style = image_process(frame, style)
             save_frame(output, videoWriter)
 
-#图像风格化
+
+# 图像风格化
 def process_image(content_path, style_path, outfile):
     image_name = outfile + '/{:s}_stylized_{:s}{:s}'.format(
         splitext(basename(content_path))[0], splitext(basename(style_path))[0], '.jpg')
     # 对图像进行风格迁移
     content = Image.open(content_path)
     style = Image.open(style_path)
-    output, style_f = image_process(content, style,"image")
+    output, style_f = image_process(content, style, "image")
     save_image(output, image_name)
     print("success")
 
@@ -215,14 +230,15 @@ def test(content_paths, style_paths):
             for style_path in style_paths:
                 process_image(content_path, style_path, outfile)
 
+
 def create_args():
     parser = argparse.ArgumentParser()
     # Basic options
-    parser.add_argument('--content', type=str,default="./content/blonde_girl.jpg",
+    parser.add_argument('--content', type=str, default="./input/content/avril.png",
                         help='File path to the content image')
     parser.add_argument('--content_dir', type=str,
                         help='Directory path to a batch of content images')
-    parser.add_argument('--style', type=str,default="./style/candy.jpg",
+    parser.add_argument('--style', type=str, default="./input/style/sketch.png",
                         help='File path to the style image, or multiple style \
                         images separated by commas if you want to do style \
                         interpolation or spatial control')
@@ -243,10 +259,11 @@ def create_args():
 
     return args
 
+
 if __name__ == '__main__':
     args = create_args()
-    with open(args.yaml_path,'r') as file :
-        yaml =yaml.load(file, Loader=yaml.FullLoader)
+    with open(args.yaml_path, 'r') as file:
+        yaml = yaml.load(file, Loader=yaml.FullLoader)
     alpha = args.a
     output_path = args.output
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
