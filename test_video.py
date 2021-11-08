@@ -13,10 +13,6 @@ import net_31 as net
 import numpy as np
 import cv2
 import yaml
-import seaborn as sns
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
 
 #读取文件函数
 def get_files(img_dir):
